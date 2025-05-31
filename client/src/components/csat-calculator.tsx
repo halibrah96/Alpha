@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import RatingInput from "./rating-input";
+import ResultImageGenerator from "./result-image-generator";
 import { useCsat } from "@/hooks/use-csat";
 import { Target, RotateCcw, Database, Download, Share } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -318,6 +319,18 @@ export default function CSATCalculator() {
             <Badge variant="secondary" className="mt-2 text-xs">1★ + 2★</Badge>
           </CardContent>
         </Card>
+      </motion.div>
+
+      {/* Image Sharing Feature */}
+      <motion.div
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 1.0, duration: 0.6 }}
+      >
+        <ResultImageGenerator 
+          calculations={calculations}
+          ratings={ratings}
+        />
       </motion.div>
     </div>
   );
