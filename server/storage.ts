@@ -1,6 +1,6 @@
-import { users, csatData, adSettings, errorLogs, type User, type InsertUser, type CsatData, type InsertCsatData, type AdSettings, type InsertAdSettings, type ErrorLog, type InsertErrorLog } from "@shared/schema";
+import { users, csatData, adSettings, errorLogs, toolSettings, apiTokens, queryLogs, serverSettings, type User, type InsertUser, type CsatData, type InsertCsatData, type AdSettings, type InsertAdSettings, type ErrorLog, type InsertErrorLog, type ToolSettings, type InsertToolSettings, type ApiToken, type InsertApiToken, type QueryLog, type InsertQueryLog, type ServerSettings, type InsertServerSettings } from "@shared/schema";
 import { db } from "./db";
-import { eq } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 
 export interface IStorage {
   // User methods
@@ -15,6 +15,25 @@ export interface IStorage {
   // Ad settings methods
   getAdSettings(): Promise<AdSettings | undefined>;
   updateAdSettings(settings: InsertAdSettings): Promise<AdSettings>;
+  
+  // Tool settings methods
+  getToolSettings(): Promise<ToolSettings | undefined>;
+  updateToolSettings(settings: InsertToolSettings): Promise<ToolSettings>;
+  
+  // API token methods
+  createApiToken(token: InsertApiToken): Promise<ApiToken>;
+  getApiTokens(): Promise<ApiToken[]>;
+  getApiToken(token: string): Promise<ApiToken | undefined>;
+  updateApiToken(id: number, data: Partial<InsertApiToken>): Promise<ApiToken>;
+  deleteApiToken(id: number): Promise<void>;
+  
+  // Query log methods
+  logQuery(log: InsertQueryLog): Promise<QueryLog>;
+  getQueryStats(): Promise<{ toolType: string; count: number }[]>;
+  
+  // Server settings methods
+  getServerSettings(): Promise<ServerSettings | undefined>;
+  updateServerSettings(settings: InsertServerSettings): Promise<ServerSettings>;
   
   // Error log methods
   logError(error: InsertErrorLog): Promise<ErrorLog>;
@@ -101,6 +120,111 @@ export class DatabaseStorage implements IStorage {
 
   async clearErrorLogs(): Promise<void> {
     await db.delete(errorLogs);
+  }
+
+  async getToolSettings(): Promise<ToolSettings | undefined> {
+    const [settings] = await db.select().from(toolSettings).limit(1);
+    return settings || undefined;
+  }
+
+  async updateToolSettings(settings: InsertToolSettings): Promise<ToolSettings> {
+    const existing = await this.getToolSettings();
+    
+    if (existing) {
+      const [updated] = await db
+        .update(toolSettings)
+        .set(settings)
+        .where(eq(toolSettings.id, existing.id))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db
+        .insert(toolSettings)
+        .values(settings)
+        .returning();
+      return created;
+    }
+  }
+
+  async createApiToken(token: InsertApiToken): Promise<ApiToken> {
+    const [created] = await db
+      .insert(apiTokens)
+      .values(token)
+      .returning();
+    return created;
+  }
+
+  async getApiTokens(): Promise<ApiToken[]> {
+    return await db.select().from(apiTokens).orderBy(desc(apiTokens.createdAt));
+  }
+
+  async getApiToken(token: string): Promise<ApiToken | undefined> {
+    const [apiToken] = await db.select().from(apiTokens).where(eq(apiTokens.token, token));
+    return apiToken || undefined;
+  }
+
+  async updateApiToken(id: number, data: Partial<InsertApiToken>): Promise<ApiToken> {
+    const [updated] = await db
+      .update(apiTokens)
+      .set(data)
+      .where(eq(apiTokens.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteApiToken(id: number): Promise<void> {
+    await db.delete(apiTokens).where(eq(apiTokens.id, id));
+  }
+
+  async logQuery(log: InsertQueryLog): Promise<QueryLog> {
+    const [created] = await db
+      .insert(queryLogs)
+      .values(log)
+      .returning();
+    return created;
+  }
+
+  async getQueryStats(): Promise<{ toolType: string; count: number }[]> {
+    const stats = await db
+      .select({
+        toolType: queryLogs.toolType,
+        count: queryLogs.id
+      })
+      .from(queryLogs);
+    
+    const groupedStats: { [key: string]: number } = {};
+    stats.forEach(stat => {
+      groupedStats[stat.toolType] = (groupedStats[stat.toolType] || 0) + 1;
+    });
+    
+    return Object.entries(groupedStats).map(([toolType, count]) => ({
+      toolType,
+      count
+    }));
+  }
+
+  async getServerSettings(): Promise<ServerSettings | undefined> {
+    const [settings] = await db.select().from(serverSettings).limit(1);
+    return settings || undefined;
+  }
+
+  async updateServerSettings(settings: InsertServerSettings): Promise<ServerSettings> {
+    const existing = await this.getServerSettings();
+    
+    if (existing) {
+      const [updated] = await db
+        .update(serverSettings)
+        .set(settings)
+        .where(eq(serverSettings.id, existing.id))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db
+        .insert(serverSettings)
+        .values(settings)
+        .returning();
+      return created;
+    }
   }
 }
 
