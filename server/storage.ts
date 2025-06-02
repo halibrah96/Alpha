@@ -1,4 +1,6 @@
 import { users, csatData, adSettings, errorLogs, type User, type InsertUser, type CsatData, type InsertCsatData, type AdSettings, type InsertAdSettings, type ErrorLog, type InsertErrorLog } from "@shared/schema";
+import { db } from "./db";
+import { eq } from "drizzle-orm";
 
 export interface IStorage {
   // User methods
@@ -20,96 +22,86 @@ export interface IStorage {
   clearErrorLogs(): Promise<void>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<number, User>;
-  private csatDataList: CsatData[];
-  private currentAdSettings: AdSettings;
-  private errorLogsList: ErrorLog[];
-  private currentId: number;
-  private currentCsatId: number;
-  private currentLogId: number;
-
-  constructor() {
-    this.users = new Map();
-    this.csatDataList = [];
-    this.errorLogsList = [];
-    this.currentId = 1;
-    this.currentCsatId = 1;
-    this.currentLogId = 1;
-    
-    // Initialize default ad settings
-    this.currentAdSettings = {
-      id: 1,
-      intrusiveAdsEnabled: true,
-      bannerAdsEnabled: true,
-      adFrequency: 5,
-      googleAdsId: null,
-    };
-
-    // Create default admin user
-    this.createUser({ username: "admin", password: "admin123" });
-  }
-
+export class DatabaseStorage implements IStorage {
   async getUser(id: number): Promise<User | undefined> {
-    return this.users.get(id);
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user || undefined;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user || undefined;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = this.currentId++;
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
+    const [user] = await db
+      .insert(users)
+      .values(insertUser)
+      .returning();
     return user;
   }
 
   async saveCsatData(data: InsertCsatData): Promise<CsatData> {
-    const csatEntry: CsatData = {
-      id: this.currentCsatId++,
-      ...data,
-      createdAt: new Date(),
-    };
-    this.csatDataList.push(csatEntry);
+    const [csatEntry] = await db
+      .insert(csatData)
+      .values(data)
+      .returning();
     return csatEntry;
   }
 
   async getLatestCsatData(): Promise<CsatData | undefined> {
-    return this.csatDataList[this.csatDataList.length - 1];
+    const [latest] = await db
+      .select()
+      .from(csatData)
+      .orderBy(csatData.createdAt)
+      .limit(1);
+    return latest || undefined;
   }
 
   async getAdSettings(): Promise<AdSettings | undefined> {
-    return this.currentAdSettings;
+    const [settings] = await db.select().from(adSettings).limit(1);
+    return settings || undefined;
   }
 
   async updateAdSettings(settings: InsertAdSettings): Promise<AdSettings> {
-    this.currentAdSettings = {
-      ...this.currentAdSettings,
-      ...settings,
-    };
-    return this.currentAdSettings;
+    // Try to update existing settings first
+    const existing = await this.getAdSettings();
+    
+    if (existing) {
+      const [updated] = await db
+        .update(adSettings)
+        .set(settings)
+        .where(eq(adSettings.id, existing.id))
+        .returning();
+      return updated;
+    } else {
+      // Create new settings if none exist
+      const [created] = await db
+        .insert(adSettings)
+        .values(settings)
+        .returning();
+      return created;
+    }
   }
 
   async logError(error: InsertErrorLog): Promise<ErrorLog> {
-    const errorEntry: ErrorLog = {
-      id: this.currentLogId++,
-      ...error,
-      timestamp: new Date(),
-    };
-    this.errorLogsList.push(errorEntry);
+    const [errorEntry] = await db
+      .insert(errorLogs)
+      .values(error)
+      .returning();
     return errorEntry;
   }
 
   async getErrorLogs(): Promise<ErrorLog[]> {
-    return [...this.errorLogsList].reverse(); // Most recent first
+    return await db
+      .select()
+      .from(errorLogs)
+      .orderBy(errorLogs.timestamp);
   }
 
   async clearErrorLogs(): Promise<void> {
-    this.errorLogsList = [];
+    await db.delete(errorLogs);
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
