@@ -103,6 +103,7 @@ export const insertApiTokenSchema = createInsertSchema(apiTokens).pick({
   name: true,
   permissions: true,
   isActive: true,
+  lastUsed: true,
 });
 
 export const insertQueryLogSchema = createInsertSchema(queryLogs).pick({

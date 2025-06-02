@@ -21,11 +21,7 @@ export default function OCRProcessor() {
       const formData = new FormData();
       formData.append('image', file);
       
-      const response = await apiRequest("POST", "/api/ocr/process", formData, {
-        headers: {
-          // Remove content-type to let browser set it with boundary
-        }
-      });
+      const response = await apiRequest("POST", "/api/ocr/process", formData);
       return response.json();
     },
     onSuccess: (data) => {
